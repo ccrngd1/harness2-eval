@@ -1,0 +1,8 @@
+{
+  "name": "harness2-eval-infra-tooling",
+  "private": true,
+  "description": "Local CDK CLI for the harness2-eval infra build (never published)",
+  "devDependencies": {
+    "aws-cdk": "2.1146.1"
+  }
+}

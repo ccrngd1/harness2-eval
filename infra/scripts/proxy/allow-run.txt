@@ -1,0 +1,7 @@
+# harness2-eval allowlist: phase `run` (NetOps §5.2, FROZEN v2).
+# EMPTY BY DESIGN: in `run` the guest's only model path is LiteLLM on
+# 10.99.0.10:4000, which does not go through squid. models.dev,
+# registry.npmjs.org, huggingface.co/hf.co, github.com,
+# raw.githubusercontent.com, codeload.github.com, mcp.exa.ai,
+# opencode.ai and the general web are all contamination-denied;
+# smoke-isolation.sh checks each by name.

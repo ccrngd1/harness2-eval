@@ -1,0 +1,88 @@
+# harness2-eval LiteLLM gateway config TEMPLATE (NetOps R4, R6, R7).
+# proxy-bootstrap.sh renders it to /opt/h2gw/litellm-config.yaml by
+# substituting:
+#   __MAX_BUDGET__    global proxy-level cap (= budgetCapUsd context; the
+#                     PRIMARY hard stop; the AWS Budget is the lagging backstop)
+#   __AWS_REGION__    deploy region (us-east-1 default)
+# The master key is NOT here: it is generated on the proxy at first boot
+# into root-only /opt/h2gw/master-key.env and passed via environment
+# (LITELLM_MASTER_KEY). The Postgres DSN is localhost-only and lives in
+# the same root-only env file (DATABASE_URL).
+#
+# Setting names verified against litellm v1.106.2 docs + source
+# (docs.litellm.ai/docs/proxy/config_settings, custom_pricing;
+# key_management_endpoints.py for /key/generate, /key/delete).
+#
+# Every model carries explicit nonzero input/output (and cache, where the
+# model supports caching) costs from PreCog §4.1 — otherwise LiteLLM
+# costs unknown Bedrock models at $0 and max_budget NEVER trips (R7).
+# Prices are USD per token (per-1M list price / 1e6), 2026-10 list;
+# verify before deploy.
+
+model_list:
+  - model_name: glm-5
+    litellm_params:
+      model: bedrock/zai.glm-5
+      aws_region_name: __AWS_REGION__
+    model_info:
+      input_cost_per_token: 1.0e-06     # $1.00 /1M
+      output_cost_per_token: 3.2e-06    # $3.20 /1M
+
+  - model_name: opus-4-8
+    litellm_params:
+      model: bedrock/us.anthropic.claude-opus-4-8
+      aws_region_name: __AWS_REGION__
+    model_info:
+      input_cost_per_token: 5.0e-06     # $5.00 /1M
+      output_cost_per_token: 2.5e-05    # $25.00 /1M
+      cache_read_input_token_cost: 5.0e-07    # $0.50 /1M
+      cache_creation_input_token_cost: 6.25e-06  # $6.25 /1M
+
+  - model_name: sonnet-4-6
+    litellm_params:
+      model: bedrock/global.anthropic.claude-sonnet-4-6
+      aws_region_name: __AWS_REGION__
+    model_info:
+      input_cost_per_token: 3.0e-06     # $3.00 /1M
+      output_cost_per_token: 1.5e-05    # $15.00 /1M
+      cache_read_input_token_cost: 3.0e-07    # $0.30 /1M
+      cache_creation_input_token_cost: 3.75e-06  # $3.75 /1M
+
+  - model_name: haiku-4-5
+    litellm_params:
+      model: bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0
+      aws_region_name: __AWS_REGION__
+    model_info:
+      input_cost_per_token: 1.0e-06     # $1.00 /1M
+      output_cost_per_token: 5.0e-06    # $5.00 /1M
+      cache_read_input_token_cost: 1.0e-07    # $0.10 /1M
+      cache_creation_input_token_cost: 1.25e-06  # $1.25 /1M
+
+  - model_name: gpt-oss-120b
+    litellm_params:
+      model: bedrock/openai.gpt-oss-120b-1:0
+      aws_region_name: __AWS_REGION__
+    model_info:
+      input_cost_per_token: 1.5e-07     # $0.15 /1M
+      output_cost_per_token: 6.0e-07    # $0.60 /1M
+
+litellm_settings:
+  # Global spend cap across the whole proxy — the PRIMARY hard stop
+  # (overshoot is bounded by ~one in-flight request). Same value as the
+  # AWS Budget cap; setup.sh substitutes it from budgetCapUsd.
+  max_budget: __MAX_BUDGET__
+  # No success/failure callbacks, no telemetry targets of any kind.
+  success_callback: []
+  failure_callback: []
+  drop_params: true
+
+general_settings:
+  # Master key via env LITELLM_MASTER_KEY (root-only file; never in
+  # user-data, CFN, or logs).
+  # database_url via env DATABASE_URL (postgres on 127.0.0.1 only).
+  store_model_in_db: false            # models come from THIS file only (R6)
+  store_prompts_in_spend_logs: false  # spend rows carry tokens/$, not text
+  allow_client_side_credentials: false  # SSRF guard: no client api_base/keys
+  forward_client_headers_to_llm_api: false
+  ui_access_mode: "admin_only"        # plus DISABLE_ADMIN_UI=True in the env
+  disable_spend_logs: false           # spend logging IS the egress evidence

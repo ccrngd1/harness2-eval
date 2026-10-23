@@ -1,0 +1,12 @@
+# harness2-eval allowlist: phase `setup` CONNECT :443 (NetOps §5.1, FROZEN v2).
+# Lines are squid dstdomain values. The two apt hosts live in
+# allow-setup-http80.txt (plain :80), not here.
+nodejs.org
+registry.npmjs.org
+pypi.org
+files.pythonhosted.org
+github.com
+codeload.github.com
+objects.githubusercontent.com
+release-assets.githubusercontent.com
+models.dev

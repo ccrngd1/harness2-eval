@@ -1,0 +1,35 @@
+# harness2-eval: belt-and-braces ignores (infra/.gitignore covers the basics).
+# Added by main's offline review 2026-10-22.
+
+# Python / Node / CDK build artifacts
+.venv/
+venv/
+.venv*/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+cdk.out/
+cdk.out.*/
+**/cdk.out*/
+
+# Account-specific CDK context (alert email, SSH pubkey, lookups).
+# The committed template is infra/cdk.context.example.json.
+cdk.context.json
+!cdk.context.example.json
+
+# Operator-side runtime state and per-arm exports (resource IDs, squid
+# logs, LiteLLM spend logs). Never commit these.
+.h2-setup-state
+.h2-setup-state.*
+runs/
+smoke-*.txt
+squid-access-run-*.log
+spend-run-*.json
+
+# Credentials, just in case
+.env
+.env.*
+*.env
+*.pem
+id_ed25519*

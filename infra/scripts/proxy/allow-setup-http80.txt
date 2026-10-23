@@ -1,0 +1,4 @@
+# harness2-eval allowlist: phase `setup` plain HTTP :80 (NetOps §5.1).
+# ONLY the two apt hosts; apt metadata/debs are GPG-signed.
+us-east-1.ec2.archive.ubuntu.com
+security.ubuntu.com

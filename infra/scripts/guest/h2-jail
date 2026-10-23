@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# h2-jail — bubblewrap launcher prefix (PreCog §6.4, NetOps §3 C6).
+#
+#   h2-jail [--workspace <dir>] <command> [args...]
+#
+# Runs <command> as the calling user inside a bwrap sandbox with:
+#   * a private /tmp and a private $HOME (tmpfs)
+#   * read-only /usr, /etc, /opt/h2 toolchains
+#   * read-write ONLY the rollout workspace (--workspace, default $PWD)
+#   * NO bind of dependencies/*/tasks/** or runs/** (oracle isolation:
+#     task.json carries judge criteria; runs/ carries other rollouts)
+#
+# Ubuntu 24.04 ships kernel.apparmor_restrict_unprivileged_userns=1 and
+# that stays ON: /usr/bin/bwrap carries the distro AppArmor profile
+# (apparmor-profiles package / bwrap's shipped profile), which grants it
+# userns creation without setuid and without loosening the sysctl.
+# Never set the sysctl to 0; never make bwrap setuid. `unshare -Ur true`
+# as eval must still FAIL outside the jail (smoke-isolation checks it).
+set -euo pipefail
+
+WORKSPACE="$PWD"
+if [[ "${1:-}" == "--workspace" ]]; then
+  WORKSPACE="$(cd "$2" && pwd)"
+  shift 2
+fi
+if [[ $# -eq 0 ]]; then
+  echo "usage: h2-jail [--workspace <dir>] <command> [args...]" >&2
+  exit 2
+fi
+
+# Refuse workspaces inside the forbidden trees instead of binding them.
+case "$WORKSPACE" in
+  */tasks/*|*/tasks|*/runs/*|*/runs)
+    echo "h2-jail: refusing workspace inside tasks/ or runs/ (oracle isolation)" >&2
+    exit 1
+    ;;
+esac
+
+JAIL_HOME=/tmp/h2-jail-home
+
+# /run/h2 (tmpfs keys.env) is bound read-only only if present: the
+# executor may read its capped virtual key; it can't rewrite it.
+RUN_H2_ARGS=()
+if [[ -d /run/h2 ]]; then
+  RUN_H2_ARGS=(--ro-bind /run/h2 /run/h2)
+fi
+
+exec bwrap \
+  --unshare-all \
+  --share-net \
+  --die-with-parent \
+  --proc /proc \
+  --dev /dev \
+  --tmpfs /tmp \
+  --tmpfs "$JAIL_HOME" \
+  --setenv HOME "$JAIL_HOME" \
+  --ro-bind /usr /usr \
+  --ro-bind /etc /etc \
+  --symlink usr/bin /bin \
+  --symlink usr/sbin /sbin \
+  --symlink usr/lib /lib \
+  --symlink usr/lib64 /lib64 \
+  --ro-bind /opt/h2/tools /opt/h2/tools \
+  --ro-bind /opt/h2/opencode /opt/h2/opencode \
+  --ro-bind /opt/h2/uv-venv /opt/h2/uv-venv \
+  --ro-bind /opt/h2/models.json /opt/h2/models.json \
+  --ro-bind /usr/local /usr/local \
+  "${RUN_H2_ARGS[@]}" \
+  --bind "$WORKSPACE" "$WORKSPACE" \
+  --chdir "$WORKSPACE" \
+  -- "$@"

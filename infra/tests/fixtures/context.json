@@ -1,0 +1,21 @@
+{
+  "_comment": "Test/synth-only context. The placeholder account 123456789012 is allowed ONLY under tests/fixtures/.",
+  "account": "123456789012",
+  "region": "us-east-1",
+  "credentialMode": "role",
+  "budgetCapUsd": 3500,
+  "restrictBedrockToProxyIp": true,
+  "budgetCostTagFilter": false,
+  "alertEmail": "cc-alerts@example.com",
+  "operatorSshPublicKey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexamplepublickeyonlyexampleonly operator@example",
+  "models": {
+    "inRegion": ["zai.glm-5", "openai.gpt-oss-120b-1:0"],
+    "usProfiles": {
+      "us.anthropic.claude-opus-4-8": ["us-east-1", "us-east-2", "us-west-2"]
+    },
+    "globalProfiles": {
+      "global.anthropic.claude-sonnet-4-6": ["us-east-1", "us-east-2", "us-west-2", "eu-west-1", "ap-northeast-1"],
+      "global.anthropic.claude-haiku-4-5-20251001-v1:0": ["us-east-1", "us-east-2", "us-west-2", "eu-west-1", "ap-northeast-1"]
+    }
+  }
+}

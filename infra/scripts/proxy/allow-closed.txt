@@ -1,0 +1,1 @@
+# harness2-eval allowlist: phase `closed` (NetOps §5.3). EMPTY: deny all.

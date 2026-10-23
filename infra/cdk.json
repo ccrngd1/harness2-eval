@@ -1,0 +1,12 @@
+{
+  "app": "python3 app.py",
+  "context": {
+    "budgetCapUsd": 3500,
+    "credentialMode": "role",
+    "restrictBedrockToProxyIp": true,
+    "budgetCostTagFilter": false,
+    "@aws-cdk/core:newStyleStackSynthesis": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+  }
+}

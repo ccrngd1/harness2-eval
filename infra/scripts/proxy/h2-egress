@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# h2-egress {closed|setup|run} [--status]
+#
+# Phase gate on the proxy (NetOps v2 §4.3 / C8). Root-only, invoked by
+# the operator over EIC; never reachable from the guest. It gates BOTH
+# exits in one atomic move:
+#
+#   phase   | squid (guest :3128)      | LiteLLM :4000 from guest
+#   closed  | deny all                 | BLOCKED (nft drop)
+#   setup   | §5.1 setup list          | BLOCKED (build code runs then)
+#   run     | deny all (empty list)    | OPEN
+#
+# Boot default is `closed`: h2-egress-boot.service runs `h2-egress closed`
+# Before=squid.service litellm.service, so neither daemon ever accepts
+# guest traffic in an ungated state.
+#
+# Every change is logged with a timestamp to /var/log/h2-egress.log.
+set -euo pipefail
+
+CONF_DIR=/etc/squid
+LISTS_DIR=/opt/h2/allowlists
+STATE_FILE=/run/h2/phase
+LOG_FILE=/var/log/h2-egress.log
+GUEST_IP=10.99.0.70
+LITELLM_PORT=4000
+
+usage() {
+  echo "usage: h2-egress {closed|setup|run} | h2-egress --status" >&2
+  exit 2
+}
+
+log() {
+  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "$LOG_FILE"
+}
+
+if [[ "${1:-}" == "--status" ]]; then
+  echo "phase: $(cat "$STATE_FILE" 2>/dev/null || echo unknown)"
+  nft list chain inet h2 guest_gateway 2>/dev/null || echo "nft chain missing"
+  exit 0
+fi
+
+PHASE="${1:-}"
+case "$PHASE" in
+  closed|setup|run) ;;
+  *) usage ;;
+esac
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "h2-egress must run as root" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$STATE_FILE")"
+
+# --- squid ACL swap ---
+# closed and run both use the empty lists; setup uses the §5.1 lists.
+# The .invalid sentinel keeps the file non-empty (squid treats a missing
+# file as a config error, and an empty dstdomain file is a parse warning).
+case "$PHASE" in
+  setup)
+    connect_src="$LISTS_DIR/allow-setup.txt"
+    http80_src="$LISTS_DIR/allow-setup-http80.txt"
+    ;;
+  closed|run)
+    connect_src=""
+    http80_src=""
+    ;;
+esac
+
+stage_acl() {
+  # stage_acl <src-or-empty> <dest>: strip comments/blanks; sentinel if empty.
+  local src="$1" dest="$2" tmp
+  tmp="$(mktemp)"
+  if [[ -n "$src" ]]; then
+    grep -vE '^[[:space:]]*(#|$)' "$src" > "$tmp" || true
+  fi
+  if [[ ! -s "$tmp" ]]; then
+    echo "deny-all.invalid" > "$tmp"
+  fi
+  install -m 0644 -o root -g root "$tmp" "$dest"
+  rm -f "$tmp"
+}
+
+stage_acl "$connect_src" "$CONF_DIR/h2-active-connect.acl"
+stage_acl "$http80_src" "$CONF_DIR/h2-active-http80.acl"
+
+if squid -k parse >/dev/null 2>&1; then
+  squid -k reconfigure
+else
+  log "ERROR phase=$PHASE squid config parse failed; NOT reloaded"
+  exit 1
+fi
+
+# --- nftables gate for guest -> :4000 (LiteLLM) ---
+# The table/chain are created by proxy-bootstrap.sh; this flushes and
+# re-adds the one phase-dependent rule.
+nft flush chain inet h2 guest_gateway
+if [[ "$PHASE" == "run" ]]; then
+  nft add rule inet h2 guest_gateway ip saddr "$GUEST_IP" tcp dport "$LITELLM_PORT" accept
+else
+  nft add rule inet h2 guest_gateway ip saddr "$GUEST_IP" tcp dport "$LITELLM_PORT" drop
+fi
+
+echo "$PHASE" > "$STATE_FILE"
+log "phase=$PHASE squid_connect_acl=$(wc -l < "$CONF_DIR/h2-active-connect.acl") entries litellm_4000=$([[ "$PHASE" == run ]] && echo open || echo blocked)"
