@@ -33,3 +33,7 @@ spend-run-*.json
 *.env
 *.pem
 id_ed25519*
+
+# Added at split from ProtoGensis (previously covered by the monorepo root .gitignore)
+*.log
+.mastercontrol/
